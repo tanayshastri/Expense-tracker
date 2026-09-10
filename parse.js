@@ -97,7 +97,28 @@ const Parse = (() => {
 
   async function extractTextFromPdf(file, onStatus) {
     const buf = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+    const loadingTask = pdfjsLib.getDocument({
+      data: buf,
+      // Called by pdf.js when the PDF is encrypted. The password is used locally,
+      // right here in the browser, purely to decrypt the file in memory — it is
+      // never saved or sent anywhere.
+      password: undefined,
+    });
+    loadingTask.onPassword = (updatePassword, reason) => {
+      const isRetry = reason === pdfjsLib.PasswordResponses.INCORRECT_PASSWORD;
+      const pwd = window.prompt(
+        isRetry ? 'That password didn\u2019t work. Try again:' : 'This statement is password protected. Enter its password:'
+      );
+      if (pwd === null) {
+        loadingTask.destroy();
+        return;
+      }
+      updatePassword(pwd);
+    };
+    const pdf = await loadingTask.promise;
+
+    
+
     let fullText = '';
     let charCount = 0;
     const pageTexts = [];
